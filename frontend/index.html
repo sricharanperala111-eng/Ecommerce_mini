@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Mini Shop</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --accent:#22c55e; --text:#e2e8f0; --muted:#94a3b8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; justify-content:space-between; align-items:center; padding:20px 32px; position:sticky; top:0; background:var(--bg); z-index:10; border-bottom:1px solid #1e293b; }
+  h1 { font-size:20px; margin:0; }
+  .cart-btn { background:var(--accent); border:none; color:#022c22; font-weight:600; padding:10px 16px; border-radius:8px; cursor:pointer; }
+  main { padding: 24px 32px; }
+  .filters { margin-bottom:20px; display:flex; gap:10px; }
+  .filters button { background:var(--card); border:1px solid #334155; color:var(--text); padding:8px 14px; border-radius:20px; cursor:pointer; font-size:13px; }
+  .filters button.active { background:var(--accent); color:#022c22; border-color:var(--accent); }
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:20px; }
+  .product { background:var(--card); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; }
+  .product img { width:100%; height:140px; object-fit:cover; }
+  .product .info { padding:14px; flex:1; display:flex; flex-direction:column; }
+  .product h3 { font-size:15px; margin:0 0 6px; }
+  .product p { font-size:12px; color:var(--muted); margin:0 0 10px; flex:1; }
+  .price-row { display:flex; justify-content:space-between; align-items:center; }
+  .price { font-weight:700; color:var(--accent); }
+  .stock { font-size:11px; color:var(--muted); }
+  .add-btn { margin-top:10px; background:var(--accent); border:none; color:#022c22; font-weight:600; padding:8px; border-radius:8px; cursor:pointer; }
+  .add-btn:disabled { background:#334155; color:var(--muted); cursor:not-allowed; }
+
+  #cartDrawer { position:fixed; top:0; right:-380px; width:360px; height:100%; background:var(--card); box-shadow:-8px 0 24px rgba(0,0,0,0.4); transition:right 0.25s; padding:24px; display:flex; flex-direction:column; }
+  #cartDrawer.open { right:0; }
+  #cartDrawer h2 { margin-top:0; }
+  .cart-item { display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #334155; font-size:13px; }
+  .cart-item button { background:none; border:none; color:#ef4444; cursor:pointer; font-size:12px; }
+  .cart-total { margin-top:auto; padding-top:16px; border-top:1px solid #334155; font-size:16px; font-weight:700; }
+  .checkout-btn { margin-top:14px; background:var(--accent); border:none; padding:12px; border-radius:8px; color:#022c22; font-weight:700; cursor:pointer; }
+  .close-btn { background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer; align-self:flex-end; }
+
+  dialog { border:none; border-radius:12px; padding:24px; background:var(--card); color:var(--text); width:340px; }
+  dialog input { width:100%; padding:8px; margin:6px 0 14px; border-radius:6px; border:1px solid #334155; background:#0f172a; color:var(--text); }
+  .row { display:flex; justify-content:flex-end; gap:10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🛍️ Mini Shop</h1>
+  <button class="cart-btn" onclick="toggleCart(true)">🛒 Cart (<span id="cartCount">0</span>)</button>
+</header>
+
+<main>
+  <div class="filters" id="filters"></div>
+  <div class="grid" id="grid"></div>
+</main>
+
+<div id="cartDrawer">
+  <button class="close-btn" onclick="toggleCart(false)">✕</button>
+  <h2>Your Cart</h2>
+  <div id="cartItems"></div>
+  <div class="cart-total">Total: $<span id="cartTotal">0.00</span></div>
+  <button class="checkout-btn" onclick="openCheckout()">Checkout</button>
+</div>
+
+<dialog id="checkoutModal">
+  <h3>Checkout</h3>
+  <input id="custName" placeholder="Full name" />
+  <input id="custEmail" placeholder="Email" />
+  <input id="custAddress" placeholder="Shipping address" />
+  <div class="row">
+    <button class="cart-btn" style="background:#334155;color:white" onclick="document.getElementById('checkoutModal').close()">Cancel</button>
+    <button class="checkout-btn" onclick="placeOrder()">Place Order</button>
+  </div>
+</dialog>
+
+<script>
+const API = "http://localhost:8081/api";
+let products = [];
+let cart = {}; // productId -> {product, qty}
+let activeCategory = "All";
+
+async function loadProducts() {
+  const res = await fetch(`${API}/products`);
+  products = await res.json();
+  renderFilters();
+  renderGrid();
+}
+
+function renderFilters() {
+  const cats = ["All", ...new Set(products.map(p => p.category))];
+  const el = document.getElementById("filters");
+  el.innerHTML = cats.map(c =>
+    `<button class="${c === activeCategory ? 'active' : ''}" onclick="filterCategory('${c}')">${c}</button>`
+  ).join("");
+}
+
+function filterCategory(cat) {
+  activeCategory = cat;
+  renderFilters();
+  renderGrid();
+}
+
+function renderGrid() {
+  const grid = document.getElementById("grid");
+  const filtered = activeCategory === "All" ? products : products.filter(p => p.category === activeCategory);
+  grid.innerHTML = filtered.map(p => `
+    <div class="product">
+      <img src="${p.imageUrl}" alt="${p.name}" />
+      <div class="info">
+        <h3>${p.name}</h3>
+        <p>${p.description}</p>
+        <div class="price-row">
+          <span class="price">$${p.price.toFixed(2)}</span>
+          <span class="stock">${p.stock} in stock</span>
+        </div>
+        <button class="add-btn" ${p.stock === 0 ? "disabled" : ""} onclick="addToCart(${p.id})">
+          ${p.stock === 0 ? "Out of stock" : "Add to cart"}
+        </button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function addToCart(id) {
+  const product = products.find(p => p.id === id);
+  if (!cart[id]) cart[id] = { product, qty: 0 };
+  if (cart[id].qty < product.stock) cart[id].qty++;
+  renderCart();
+}
+
+function removeFromCart(id) {
+  delete cart[id];
+  renderCart();
+}
+
+function renderCart() {
+  const items = Object.values(cart);
+  document.getElementById("cartCount").innerText = items.reduce((a, i) => a + i.qty, 0);
+  document.getElementById("cartItems").innerHTML = items.map(i => `
+    <div class="cart-item">
+      <span>${i.product.name} × ${i.qty}</span>
+      <span>$${(i.product.price * i.qty).toFixed(2)} <button onclick="removeFromCart(${i.product.id})">remove</button></span>
+    </div>
+  `).join("") || "<p style='color:#94a3b8'>Your cart is empty.</p>";
+  const total = items.reduce((a, i) => a + i.product.price * i.qty, 0);
+  document.getElementById("cartTotal").innerText = total.toFixed(2);
+}
+
+function toggleCart(open) {
+  document.getElementById("cartDrawer").classList.toggle("open", open);
+}
+
+function openCheckout() {
+  if (Object.keys(cart).length === 0) { alert("Your cart is empty"); return; }
+  document.getElementById("checkoutModal").showModal();
+}
+
+async function placeOrder() {
+  const name = document.getElementById("custName").value;
+  const email = document.getElementById("custEmail").value;
+  const address = document.getElementById("custAddress").value;
+  if (!name || !email || !address) { alert("Please fill all fields"); return; }
+
+  const payload = {
+    customerName: name,
+    customerEmail: email,
+    shippingAddress: address,
+    items: Object.values(cart).map(i => ({ productId: i.product.id, quantity: i.qty }))
+  };
+
+  const res = await fetch(`${API}/orders/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (res.ok) {
+    const order = await res.json();
+    alert(`Order #${order.id} placed! Total: $${order.totalAmount.toFixed(2)}`);
+    cart = {};
+    renderCart();
+    document.getElementById("checkoutModal").close();
+    toggleCart(false);
+    loadProducts(); // refresh stock
+  } else {
+    const msg = await res.text();
+    alert("Checkout failed: " + msg);
+  }
+}
+
+loadProducts();
+</script>
+</body>
+</html>
