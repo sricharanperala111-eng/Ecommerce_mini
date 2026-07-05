@@ -36,13 +36,4 @@ Open `frontend/index.html` directly in your browser. It calls the backend at `lo
 | POST   | /api/orders/checkout            | Place an order from cart items         |
 | PATCH  | /api/orders/{id}/status          | Update order status                     |
 
-## Resume bullet point ideas
-- Built a full-stack e-commerce app with Spring Boot, handling product catalog management, cart logic, and a transactional checkout flow that validates and deducts inventory.
-- Modeled a relational schema (Product, Order, OrderItem) with JPA one-to-many relationships and exposed a REST API for a JS storefront.
 
-## Ideas to extend further (good for interview talking points)
-- Integrate Stripe test-mode payments at checkout
-- Add Spring Security with role-based access (admin vs. customer)
-- Add pagination and search to the product catalog
-- Move to PostgreSQL and add Flyway migrations
-- Add order status tracking UI (Placed → Shipped → Delivered)
